@@ -1,6 +1,18 @@
 import logging
-from PySide6 import QtWidgets, QtCore
-from omni_trans_core.ui.dialogs import AnimatedDialog
+from PySide6 import QtWidgets, QtCore, QtGui
+from qfluentwidgets import (
+    BodyLabel,
+    CardWidget,
+    CheckBox,
+    Dialog,
+    LineEdit,
+    MessageBox,
+    PushButton,
+    RadioButton,
+    SmoothScrollArea,
+    StrongBodyLabel,
+    isDarkTheme,
+)
 from omni_trans_core.localization_manager import auto_register, loc_man, translate
 from omni_trans_core import settings
 from ..constants import LOG_PREFIX
@@ -11,21 +23,27 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(f"{LOG_PREFIX}_APP_UI.dialogs")
 
+DIALOG_WIDTH = 660
+DIALOG_HEIGHT = 740
+NO_LANGUAGES_COLOR = "#ff9800"
+LANGUAGE_GRID_COLUMNS = 2
+
+
 @auto_register(
     ("", "windowTitle", "dialog.export.title"),
-    ("name_group_box", "title", "dialog.export.group.name"),
-    ("lang_group_box", "title", "dialog.export.group.languages"),
-    ("options_group", "title", "dialog.export.group.options"),
+    ("name_label", "text", "dialog.export.group.name"),
+    ("languages_label", "text", "dialog.export.group.languages"),
+    ("options_label", "text", "dialog.export.group.options"),
     ("includeOriginalsCheck", "text", "dialog.export.check.include_originals"),
     ("includeOriginalsCheck", "toolTip", "dialog.export.check.include_originals.tooltip"),
-    ("missing_trans_group", "title", "dialog.export.group.missing_translation"),
+    ("missing_translation_label", "text", "dialog.export.group.missing_translation"),
     ("leaveOriginalRadio", "text", "dialog.export.radio.leave_original"),
     ("skipKeyRadio", "text", "dialog.export.radio.skip_key"),
-    ("stats_group", "title", "dialog.export.group.stats"),
+    ("stats_header", "text", "dialog.export.group.stats"),
 )
-class ExportSettingsDialog(AnimatedDialog):
+class ExportSettingsDialog(Dialog):
     def __init__(self, main_window: "CoreApp", default_lore_name: str, parent=None):
-        super().__init__(parent)
+        super().__init__(translate("dialog.export.title"), "", parent)
         self.main_window = main_window
         self.all_entries = (
             self.main_window.data_handler.data.get("entries", {})
@@ -34,86 +52,145 @@ class ExportSettingsDialog(AnimatedDialog):
         self.src_lang = settings.current_settings.get("selected_source_language", "")
         self.available_target_langs = settings.current_settings.get( "target_languages", [] )
         self.current_selected_target_lang = settings.current_settings.get( "selected_target_language", "" )
-        flags = self.windowFlags() & ~QtCore.Qt.WindowContextHelpButtonHint
-        self.setWindowFlags(flags)
-        self.setMinimumSize(500, 500)
-        main_layout = QtWidgets.QVBoxLayout(self)
-        self.name_group_box = QtWidgets.QGroupBox()
-        name_layout = QtWidgets.QHBoxLayout(self.name_group_box)
-        self.loreNameEdit = QtWidgets.QLineEdit(default_lore_name)
-        name_layout.addWidget(self.loreNameEdit)
-        main_layout.addWidget(self.name_group_box)
-        self.lang_group_box = QtWidgets.QGroupBox()
-        lang_group_box_layout = QtWidgets.QVBoxLayout(self.lang_group_box)
-        lang_scroll_area = QtWidgets.QScrollArea()
-        lang_scroll_area.setWidgetResizable(True)
-        lang_scroll_area.setMinimumHeight(150)
-        lang_widget_container = QtWidgets.QWidget()
-        self.lang_grid_layout = QtWidgets.QGridLayout(lang_widget_container)
-        lang_scroll_area.setWidget(lang_widget_container)
-        lang_group_box_layout.addWidget(lang_scroll_area)
-        main_layout.addWidget(self.lang_group_box)
         self.lang_checkboxes = {}
-        if not self.available_target_langs:
-            no_langs_label = QtWidgets.QLabel()
-            loc_man.register(no_langs_label, "text", "dialog.export.no_languages")
-            no_langs_label.setStyleSheet("color: orange;")
-            self.lang_grid_layout.addWidget(no_langs_label, 0, 0)
-        else:
-            select_buttons_layout = QtWidgets.QHBoxLayout()
-            select_all_button = QtWidgets.QPushButton()
-            deselect_all_button = QtWidgets.QPushButton()
-            select_buttons_layout.addWidget(select_all_button)
-            select_buttons_layout.addWidget(deselect_all_button)
-            select_buttons_layout.addStretch()
-            self.lang_grid_layout.addLayout(select_buttons_layout, 0, 0, 1, 2)
-            sorted_langs = sorted(self.available_target_langs)
-            row, col = 1, 0
-            for lang_name in sorted_langs:
-                checkbox = QtWidgets.QCheckBox(lang_name)
-                if lang_name == self.current_selected_target_lang:
-                    checkbox.setChecked(True)
-                self.lang_checkboxes[lang_name] = checkbox
-                self.lang_grid_layout.addWidget(checkbox, row, col)
-                col += 1
-                if col > 1:
-                    col = 0
-                    row += 1
-            self.lang_grid_layout.setRowStretch(row + 1, 1)
-            loc_man.register(select_all_button, "text", "dialog.export.select_all")
-            select_all_button.clicked.connect(self.select_all_langs)
-            loc_man.register(deselect_all_button, "text", "dialog.export.deselect_all")
-            deselect_all_button.clicked.connect(self.deselect_all_langs)
-        self.options_group = QtWidgets.QGroupBox()
-        options_layout = QtWidgets.QVBoxLayout(self.options_group)
-        self.includeOriginalsCheck = QtWidgets.QCheckBox()
-        self.includeOriginalsCheck.setChecked(True)
-        options_layout.addWidget(self.includeOriginalsCheck)
-        self.missing_trans_group = QtWidgets.QGroupBox()
-        missing_trans_layout = QtWidgets.QVBoxLayout(self.missing_trans_group)
-        self.leaveOriginalRadio = QtWidgets.QRadioButton()
-        self.leaveOriginalRadio.setChecked(True)
-        self.skipKeyRadio = QtWidgets.QRadioButton()
-        missing_trans_layout.addWidget(self.leaveOriginalRadio)
-        missing_trans_layout.addWidget(self.skipKeyRadio)
-        options_layout.addWidget(self.missing_trans_group)
-        main_layout.addWidget(self.options_group)
-        self.stats_group = QtWidgets.QGroupBox()
-        stats_layout = QtWidgets.QVBoxLayout(self.stats_group)
-        self.stats_label = QtWidgets.QLabel()
-        self.stats_label.setWordWrap(True)
-        stats_layout.addWidget(self.stats_label)
-        main_layout.addWidget(self.stats_group, stretch=1)
-        self.buttonBox = QtWidgets.QDialogButtonBox( QtWidgets.QDialogButtonBox.Ok | QtWidgets.QDialogButtonBox.Cancel)
-        self.buttonBox.accepted.connect(self.accept_settings)
-        self.buttonBox.rejected.connect(self.reject)
-        main_layout.addWidget(self.buttonBox)
+        self.setFixedSize(DIALOG_WIDTH, DIALOG_HEIGHT)
+        self._init_window_chrome()
+        self._build_ui(default_lore_name)
         for checkbox in self.lang_checkboxes.values():
             checkbox.stateChanged.connect(self.update_stats)
         self.includeOriginalsCheck.stateChanged.connect(self.update_stats)
         self.leaveOriginalRadio.toggled.connect(self.update_stats)
         loc_man.language_changed.connect(self.update_stats)
         self.update_stats()
+
+    def _init_window_chrome(self):
+        """Keep the Fluent title bar so the dialog can be moved, drop the inline title."""
+        self.titleBar.show()
+        self.titleBar.raise_()
+        # The stock title bar glyph is black and disappears on the dark background.
+        self.titleBar.closeBtn.setNormalColor(
+            QtGui.QColor("#ffffff" if isDarkTheme() else "#000000")
+        )
+        self.titleLabel.hide()
+        self.contentLabel.hide()
+        self.textLayout.setContentsMargins(0, 8, 0, 0)
+
+    def _build_ui(self, default_lore_name: str):
+        self._scroll_area = SmoothScrollArea(self)
+        self._scroll_area.setWidgetResizable(True)
+        self._scroll_area.setHorizontalScrollBarPolicy(
+            QtCore.Qt.ScrollBarPolicy.ScrollBarAlwaysOff
+        )
+        self._scroll_area.setStyleSheet(
+            "QScrollArea{border: none; background: transparent}"
+        )
+        self._content = QtWidgets.QWidget(self._scroll_area)
+        self._content.setObjectName("exportSettingsContent")
+        self._content.setStyleSheet(
+            "#exportSettingsContent{background: transparent}"
+        )
+        self._content_layout = QtWidgets.QVBoxLayout(self._content)
+        self._content_layout.setContentsMargins(24, 8, 24, 16)
+        self._content_layout.setSpacing(12)
+        self._scroll_area.setWidget(self._content)
+        self.textLayout.addWidget(self._scroll_area, 1)
+
+        self._build_name_card(default_lore_name)
+        self._build_languages_card()
+        self._build_options_card()
+        self._build_stats_card()
+        self._content_layout.addStretch(1)
+
+    def _create_card(self) -> tuple[CardWidget, QtWidgets.QVBoxLayout]:
+        card = CardWidget(self._content)
+        card_layout = QtWidgets.QVBoxLayout(card)
+        card_layout.setContentsMargins(16, 12, 16, 12)
+        card_layout.setSpacing(8)
+        self._content_layout.addWidget(card)
+        return card, card_layout
+
+    def _build_name_card(self, default_lore_name: str):
+        self.name_card, card_layout = self._create_card()
+        self.name_label = StrongBodyLabel(self.name_card)
+        self.loreNameEdit = LineEdit(self.name_card)
+        self.loreNameEdit.setText(default_lore_name)
+        card_layout.addWidget(self.name_label)
+        card_layout.addWidget(self.loreNameEdit)
+
+    def _build_languages_card(self):
+        self.lang_card, card_layout = self._create_card()
+        self.languages_label = StrongBodyLabel(self.lang_card)
+        card_layout.addWidget(self.languages_label)
+
+        if not self.available_target_langs:
+            no_langs_label = BodyLabel(self.lang_card)
+            no_langs_label.setWordWrap(True)
+            no_langs_label.setStyleSheet(f"color: {NO_LANGUAGES_COLOR};")
+            loc_man.register(no_langs_label, "text", "dialog.export.no_languages")
+            card_layout.addWidget(no_langs_label)
+            return
+
+        select_buttons_layout = QtWidgets.QHBoxLayout()
+        select_buttons_layout.setSpacing(8)
+        self.select_all_button = PushButton(self.lang_card)
+        self.deselect_all_button = PushButton(self.lang_card)
+        loc_man.register(self.select_all_button, "text", "dialog.export.select_all")
+        loc_man.register(self.deselect_all_button, "text", "dialog.export.deselect_all")
+        self.select_all_button.clicked.connect(self.select_all_langs)
+        self.deselect_all_button.clicked.connect(self.deselect_all_langs)
+        select_buttons_layout.addWidget(self.select_all_button)
+        select_buttons_layout.addWidget(self.deselect_all_button)
+        select_buttons_layout.addStretch(1)
+        card_layout.addLayout(select_buttons_layout)
+
+        lang_widget_container = QtWidgets.QWidget(self.lang_card)
+        lang_widget_container.setObjectName("languageGridContainer")
+        lang_widget_container.setStyleSheet(
+            "#languageGridContainer{background: transparent}"
+        )
+        self.lang_grid_layout = QtWidgets.QGridLayout(lang_widget_container)
+        self.lang_grid_layout.setContentsMargins(0, 0, 0, 0)
+        self.lang_grid_layout.setHorizontalSpacing(24)
+        self.lang_grid_layout.setVerticalSpacing(8)
+
+        sorted_langs = sorted(self.available_target_langs)
+        for index, lang_name in enumerate(sorted_langs):
+            checkbox = CheckBox(lang_widget_container)
+            checkbox.setText(lang_name)
+            if lang_name == self.current_selected_target_lang:
+                checkbox.setChecked(True)
+            self.lang_checkboxes[lang_name] = checkbox
+            self.lang_grid_layout.addWidget(
+                checkbox,
+                index // LANGUAGE_GRID_COLUMNS,
+                index % LANGUAGE_GRID_COLUMNS,
+            )
+        rows = (len(sorted_langs) + LANGUAGE_GRID_COLUMNS - 1) // LANGUAGE_GRID_COLUMNS
+        self.lang_grid_layout.setRowStretch(rows, 1)
+        card_layout.addWidget(lang_widget_container)
+
+    def _build_options_card(self):
+        self.options_card, card_layout = self._create_card()
+        self.options_label = StrongBodyLabel(self.options_card)
+        self.includeOriginalsCheck = CheckBox(self.options_card)
+        self.includeOriginalsCheck.setChecked(True)
+        self.missing_translation_label = BodyLabel(self.options_card)
+        self.leaveOriginalRadio = RadioButton(self.options_card)
+        self.leaveOriginalRadio.setChecked(True)
+        self.skipKeyRadio = RadioButton(self.options_card)
+        card_layout.addWidget(self.options_label)
+        card_layout.addWidget(self.includeOriginalsCheck)
+        card_layout.addWidget(self.missing_translation_label)
+        card_layout.addWidget(self.leaveOriginalRadio)
+        card_layout.addWidget(self.skipKeyRadio)
+
+    def _build_stats_card(self):
+        self.stats_card, card_layout = self._create_card()
+        self.stats_header = StrongBodyLabel(self.stats_card)
+        self.stats_label = BodyLabel(self.stats_card)
+        self.stats_label.setWordWrap(True)
+        card_layout.addWidget(self.stats_header)
+        card_layout.addWidget(self.stats_label)
 
     def update_stats(self):
         self.stats_label.setText(translate("dialog.export.stats.calculating"))
@@ -167,18 +244,19 @@ class ExportSettingsDialog(AnimatedDialog):
         for checkbox in self.lang_checkboxes.values():
             checkbox.setChecked(False)
 
+    def accept(self):
+        self.accept_settings()
+
     def accept_settings(self):
         if self.lang_checkboxes and not any( cb.isChecked() for cb in self.lang_checkboxes.values() ):
-            reply = QtWidgets.QMessageBox.question(
-                self,
+            box = MessageBox(
                 translate("dialog.export.prompt.no_languages_selected.title"),
                 translate("dialog.export.prompt.no_languages_selected.text"),
-                QtWidgets.QMessageBox.StandardButton.Yes
-                | QtWidgets.QMessageBox.StandardButton.No,
-                QtWidgets.QMessageBox.StandardButton.No,)
-            if reply == QtWidgets.QMessageBox.StandardButton.No:
+                self,
+            )
+            if box.exec() != QtWidgets.QDialog.DialogCode.Accepted:
                 return
-        self.accept()
+        super().accept()
 
     def get_export_settings(self):
         lore_name = self.loreNameEdit.text().strip()

@@ -1,5 +1,6 @@
 import logging
 from PySide6 import QtWidgets, QtCore
+from qfluentwidgets import HeaderCardWidget, MessageBox, SmoothScrollArea, TextEdit
 from omni_trans_core.interfaces import (
     AbstractTab,
     TranslatableItem,
@@ -51,7 +52,11 @@ class TranslationTab(AbstractTab, IControlWidgetActions):
     
     def init_ui(self):
         translation_layout = QtWidgets.QVBoxLayout(self)
+        translation_layout.setContentsMargins(16, 16, 16, 16)
+        translation_layout.setSpacing(12)
         language_panel_layout = QtWidgets.QHBoxLayout()
+        language_panel_layout.setContentsMargins(0, 0, 0, 0)
+        language_panel_layout.setSpacing(12)
         self.source_lang_widget = SourceLanguageWidget()
         self.target_lang_widget = TargetLanguageWidget()
         language_panel_layout.addWidget(self.source_lang_widget, stretch=1)
@@ -94,6 +99,8 @@ class TranslationTab(AbstractTab, IControlWidgetActions):
         top_middle_h_splitter.addWidget(self.table_widget)
         right_panel_widget = QtWidgets.QWidget()
         right_panel_layout = QtWidgets.QVBoxLayout(right_panel_widget)
+        right_panel_layout.setContentsMargins(0, 0, 0, 0)
+        right_panel_layout.setSpacing(8)
         self.control_panel = TranslationControlWidget(actions_handler=self)
         right_panel_layout.addWidget(self.control_panel)
         self.connection_table = MultiConnectionTable(self.main_window)
@@ -105,17 +112,42 @@ class TranslationTab(AbstractTab, IControlWidgetActions):
         self.rpm_status_widget = RPMStatusWidget(self)
         right_panel_layout.addWidget(self.rpm_status_widget)
         right_panel_layout.addStretch()
-        top_middle_h_splitter.addWidget(right_panel_widget)
-        top_middle_h_splitter.setStretchFactor(0, 2)
-        top_middle_h_splitter.setStretchFactor(1, 1)
+        right_panel_scroll = SmoothScrollArea()
+        right_panel_scroll.setWidgetResizable(True)
+        right_panel_scroll.setFrameShape(QtWidgets.QFrame.Shape.NoFrame)
+        right_panel_scroll.setHorizontalScrollBarPolicy(
+            QtCore.Qt.ScrollBarPolicy.ScrollBarAlwaysOff
+        )
+        right_panel_scroll.setWidget(right_panel_widget)
+        top_middle_h_splitter.addWidget(right_panel_scroll)
+        top_middle_h_splitter.setStretchFactor(0, 3)
+        top_middle_h_splitter.setStretchFactor(1, 2)
+        top_middle_h_splitter.setSizes([705, 470])
         middle_v_splitter.addWidget(top_middle_h_splitter)
-        self.content_display_group = QtWidgets.QGroupBox()
-        content_display_layout = QtWidgets.QVBoxLayout(self.content_display_group)
-        self.full_content_display = QtWidgets.QTextEdit()
+        self.content_display_group = HeaderCardWidget()
+        content_display_widget = QtWidgets.QWidget(self.content_display_group)
+        content_display_layout = QtWidgets.QVBoxLayout(content_display_widget)
+        content_display_layout.setContentsMargins(0, 0, 0, 0)
+        self.full_content_display = TextEdit(content_display_widget)
         self.full_content_display.setReadOnly(True)
         content_display_layout.addWidget(self.full_content_display)
+        self.content_display_group.viewLayout.addWidget(content_display_widget)
         middle_v_splitter.addWidget(self.content_display_group)
         translation_layout.addWidget(middle_v_splitter, stretch=1)
+
+    def _show_warning(self, title: str, content: str):
+        box = MessageBox(title, content, self)
+        box.hideCancelButton()
+        box.exec()
+
+    def _show_info(self, title: str, content: str):
+        box = MessageBox(title, content, self)
+        box.hideCancelButton()
+        box.exec()
+
+    def _confirm(self, title: str, content: str) -> bool:
+        box = MessageBox(title, content, self)
+        return box.exec() == QtWidgets.QDialog.DialogCode.Accepted
 
     def _connect_signals(self):
         self.main_window.translation_manager.rpm_status_updated.connect(
@@ -159,8 +191,7 @@ class TranslationTab(AbstractTab, IControlWidgetActions):
     @QtCore.Slot(str)
     def on_source_language_change(self, lang_name: str):
         if self.main_window.translation_manager.active_translation_jobs > 0:
-            QtWidgets.QMessageBox.warning(
-                self,
+            self._show_warning(
                 translate("tab.translation.dialog.operation_in_progress.title"),
                 translate("tab.translation.dialog.cannot_change_source"),
             )
@@ -176,8 +207,7 @@ class TranslationTab(AbstractTab, IControlWidgetActions):
     @QtCore.Slot(str)
     def _on_target_language_changed(self, lang_name: str):
         if self.main_window.translation_manager.active_translation_jobs > 0:
-            QtWidgets.QMessageBox.warning(
-                self,
+            self._show_warning(
                 translate("tab.translation.dialog.operation_in_progress.title"),
                 translate("tab.translation.dialog.cannot_change_target"),
             )
@@ -335,9 +365,8 @@ class TranslationTab(AbstractTab, IControlWidgetActions):
     @QtCore.Slot(str, str)
     def _on_item_edited(self, item_id: str, new_text: str):
         if self.main_window.translation_manager.active_translation_jobs > 0:
-            QtWidgets.QMessageBox.warning(
-                self,
-                "Operation in Progress",
+            self._show_warning(
+                translate("tab.translation.dialog.operation_in_progress.title"),
                 "Cannot save edits while translations are active.",
             )
             return
@@ -349,10 +378,9 @@ class TranslationTab(AbstractTab, IControlWidgetActions):
         tgt_lang = self.target_lang_widget.combo.currentText()
         src_lang = self.source_lang_widget.combo.currentText()
         if not all([tgt_lang, src_lang]):
-            QtWidgets.QMessageBox.warning(
-                self,
-                "Language Not Set",
-                "Cannot apply translation: Source or target language is not selected.",
+            self._show_warning(
+                translate("manager.language_error.title"),
+                translate("manager.language_error.text"),
             )
             return
         self.main_window.cache_manager.update_cache(
@@ -400,66 +428,63 @@ class TranslationTab(AbstractTab, IControlWidgetActions):
         self, items: list[TranslatableItem], force_regen: bool
     ):
         if not self.data_handler.data:
-            QtWidgets.QMessageBox.information(
-                self, "Info", "Load or create a LORE-book first."
+            self._show_info(
+                translate("widget.control.error.no_data.title"),
+                "Load or create a LORE-book first.",
             )
             return
         self.translation_requested.emit(items, force_regen)
 
     def handle_deletion_request(self, items: list[TranslatableItem]):
         if self.main_window.translation_manager.active_translation_jobs > 0:
-            QtWidgets.QMessageBox.warning(
-                self,
-                "Operation in Progress",
+            self._show_warning(
+                translate("tab.translation.dialog.operation_in_progress.title"),
                 "Cannot delete translations while other operations are active.",
             )
             return
         tgt_lang = self.target_lang_widget.combo.currentText()
         src_lang = self.source_lang_widget.combo.currentText()
         if not all([tgt_lang, src_lang]):
-            QtWidgets.QMessageBox.warning(
-                self,
-                "Language Not Set",
-                "Cannot delete: Source or target language is not selected.",
+            self._show_warning(
+                translate("manager.language_error.title"),
+                translate("manager.language_error.text"),
             )
             return
-        reply = QtWidgets.QMessageBox.question(
-            self,
-            "Confirm Delete",
-            f"Are you sure you want to delete {len(items)} translation(s) for language '{tgt_lang}'?",
-            QtWidgets.QMessageBox.StandardButton.Yes
-            | QtWidgets.QMessageBox.StandardButton.No,
-            QtWidgets.QMessageBox.StandardButton.No,
+        title = translate("tab.editor.dialog.confirm_delete.title")
+        text = (
+            f"Are you sure you want to delete {len(items)} translation(s) "
+            f"for language '{tgt_lang}'?"
         )
-        if reply == QtWidgets.QMessageBox.StandardButton.Yes:
-            deleted_count = 0
-            deleted_ids = []
-            for item in items:
-                item_id = item["id"]
-                deleted_ids.append(item_id)
-                source_text = item["source_text"]
-                self.main_window.cache_manager.update_cache(
-                    source_text, "", src_lang, tgt_lang
-                )
-                for row_data in self.table_data:
-                    if row_data.get("id") == item_id:
-                        row_data["translation"] = ""
-                        break
-                self.table_widget.update_row_by_id(item_id, {"translation": ""})
-                if self.control_panel.current_item_id == item_id:
-                    self.control_panel.update_item_display(item_id, "")
-                deleted_count += 1
-            if deleted_ids:
-                self.table_widget.flash_row_by_id(
-                    deleted_ids, color=const.FLASH_DANGER_COLOR
-                )
-            if deleted_count > 0:
-                self.main_window.status_bar.showMessage(
-                    f"Deleted {deleted_count} translation(s).", 5000
-                )
+        if not self._confirm(title, text):
+            return
+        deleted_count = 0
+        deleted_ids = []
+        for item in items:
+            item_id = item["id"]
+            deleted_ids.append(item_id)
+            source_text = item["source_text"]
+            self.main_window.cache_manager.update_cache(
+                source_text, "", src_lang, tgt_lang
+            )
+            for row_data in self.table_data:
+                if row_data.get("id") == item_id:
+                    row_data["translation"] = ""
+                    break
+            self.table_widget.update_row_by_id(item_id, {"translation": ""})
+            if self.control_panel.current_item_id == item_id:
+                self.control_panel.update_item_display(item_id, "")
+            deleted_count += 1
+        if deleted_ids:
+            self.table_widget.flash_row_by_id(
+                deleted_ids, color=const.FLASH_DANGER_COLOR
+            )
+        if deleted_count > 0:
+            self.main_window.status_bar.showMessage(
+                f"Deleted {deleted_count} translation(s).", 5000
+            )
 
     def show_info_message(self, title: str, text: str):
-        QtWidgets.QMessageBox.information(self, title, text)
+        self._show_info(title, text)
 
     @QtCore.Slot(dict)
     def update_item_display(self, update_data: dict):

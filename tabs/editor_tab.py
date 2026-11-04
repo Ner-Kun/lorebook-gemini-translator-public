@@ -1,13 +1,25 @@
-import logging
 import copy
+import logging
 from PySide6 import QtWidgets, QtCore, QtGui
+from qfluentwidgets import (
+    BodyLabel,
+    CaptionLabel,
+    CheckBox,
+    ComboBox,
+    HeaderCardWidget,
+    LineEdit,
+    MessageBox,
+    PrimaryPushButton,
+    PushButton,
+    SmoothScrollArea,
+    StrongBodyLabel,
+)
 from omni_trans_core.interfaces import AbstractTab
 from omni_trans_core.ui.base_widgets import ShakeLineEdit, FocusOutTextEdit
 from omni_trans_core.ui.widgets import DataTableWidget
 from omni_trans_core.ui.animations import UIAnimator
 from omni_trans_core.utils import DebounceTimer
-from omni_trans_core import settings
-from omni_trans_core.localization_manager import auto_register, translate
+from omni_trans_core.localization_manager import auto_register, loc_man, translate
 from ..constants import LOG_PREFIX
 from typing import TYPE_CHECKING
 
@@ -86,12 +98,6 @@ EDITOR_TRI_STATE_KEYS = (
     ("editor_widgets.delayUntilRecursion_check", "text", "tab.editor.check.delay_until_recursion"),
     ("editor_widgets.delayRecursionLevel_edit", "placeholderText", "tab.editor.placeholder.level"),
     ("automation_id_label", "text", "tab.editor.label.automation_id"),
-    ("editor_widgets.logic_combo", "comboKeys", EDITOR_LOGIC_KEYS),
-    ("editor_widgets.position_combo", "comboKeys", EDITOR_POSITION_KEYS),
-    ("editor_widgets.strategy_combo", "comboKeys", EDITOR_STRATEGY_KEYS),
-    ("editor_widgets.caseSensitive_combo", "comboKeys", EDITOR_TRI_STATE_KEYS),
-    ("editor_widgets.matchWholeWords_combo", "comboKeys", EDITOR_TRI_STATE_KEYS),
-    ("editor_widgets.useGroupScoring_combo", "comboKeys", EDITOR_TRI_STATE_KEYS),
 )
 class EditorTab(AbstractTab):
     TAB_NAME = "Editor"
@@ -112,6 +118,7 @@ class EditorTab(AbstractTab):
         self._init_field_mapping()
         self.init_ui()
         self._connect_signals()
+        loc_man.language_changed.connect(self.retranslate)
         self.editor_debounce_timer = DebounceTimer(
             self.editor_save_entry_changes, 1000, self
         )
@@ -147,6 +154,8 @@ class EditorTab(AbstractTab):
 
     def init_ui(self):
         editor_layout = QtWidgets.QHBoxLayout(self)
+        editor_layout.setContentsMargins(16, 16, 16, 16)
+        editor_layout.setSpacing(12)
         editor_splitter = QtWidgets.QSplitter(QtCore.Qt.Orientation.Horizontal)
         editor_splitter.setOpaqueResize(False)
         editor_layout.addWidget(editor_splitter)
@@ -154,14 +163,18 @@ class EditorTab(AbstractTab):
         editor_splitter.addWidget(editor_left_panel)
         editor_right_panel = self._create_right_panel()
         editor_splitter.addWidget(editor_right_panel)
-        editor_splitter.setSizes([400, 700])
+        editor_splitter.setStretchFactor(0, 0)
+        editor_splitter.setStretchFactor(1, 1)
+        editor_splitter.setSizes([380, 800])
 
     def _create_left_panel(self):
         editor_left_panel = QtWidgets.QWidget()
         editor_left_layout = QtWidgets.QVBoxLayout(editor_left_panel)
+        editor_left_layout.setContentsMargins(0, 0, 0, 0)
+        editor_left_layout.setSpacing(8)
         editor_left_panel.setMinimumWidth(350)
         editor_left_panel.setMaximumWidth(550)
-        self.lore_entries_label = QtWidgets.QLabel()
+        self.lore_entries_label = StrongBodyLabel()
         editor_left_layout.addWidget(self.lore_entries_label)
         self.table_widget = DataTableWidget()
         self.editor_search_input = self.table_widget.search_input
@@ -193,31 +206,61 @@ class EditorTab(AbstractTab):
         self.editor_entry_table.setWordWrap(False)
         editor_left_layout.addWidget(self.table_widget)
         editor_button_layout = QtWidgets.QHBoxLayout()
-        self.editor_add_btn = QtWidgets.QPushButton()
-        self.editor_duplicate_btn = QtWidgets.QPushButton()
-        self.editor_delete_btn = QtWidgets.QPushButton()
+        editor_button_layout.setContentsMargins(0, 0, 0, 0)
+        editor_button_layout.setSpacing(8)
+        self.editor_add_btn = PrimaryPushButton()
+        self.editor_duplicate_btn = PushButton()
+        self.editor_delete_btn = PushButton()
         editor_button_layout.addWidget(self.editor_add_btn)
         editor_button_layout.addWidget(self.editor_duplicate_btn)
         editor_button_layout.addWidget(self.editor_delete_btn)
         editor_left_layout.addLayout(editor_button_layout)
         return editor_left_panel
 
+    def _create_group(self):
+        card = HeaderCardWidget()
+        card.viewLayout.setContentsMargins(16, 12, 16, 16)
+        content = QtWidgets.QWidget(card)
+        content_layout = QtWidgets.QVBoxLayout(content)
+        content_layout.setContentsMargins(0, 0, 0, 0)
+        content_layout.setSpacing(10)
+        card.viewLayout.addWidget(content)
+        return card, content_layout
+
+    @staticmethod
+    def _constrain_combo(combo: ComboBox, min_width: int, max_width: int):
+        combo.setMinimumWidth(min_width)
+        combo.setMaximumWidth(max_width)
+
+    @staticmethod
+    def _constrain_numeric(edit: ShakeLineEdit):
+        edit.setMinimumWidth(64)
+        edit.setMaximumWidth(96)
+
     def _create_right_panel(self):
-        scroll_area = QtWidgets.QScrollArea()
+        scroll_area = SmoothScrollArea()
         scroll_area.setWidgetResizable(True)
+        scroll_area.setHorizontalScrollBarPolicy(
+            QtCore.Qt.ScrollBarPolicy.ScrollBarAlwaysOff
+        )
         self.editor_form_widget = QtWidgets.QWidget()
+        self.editor_form_widget.setMinimumWidth(0)
         scroll_area.setWidget(self.editor_form_widget)
         editor_right_layout = QtWidgets.QVBoxLayout(self.editor_form_widget)
+        editor_right_layout.setContentsMargins(0, 0, 8, 0)
+        editor_right_layout.setSpacing(12)
         self.editor_form_widget.setEnabled(False)
-        self.basic_info_group = QtWidgets.QGroupBox()
-        basic_info_layout = QtWidgets.QFormLayout(self.basic_info_group)
-        self.editor_widgets["enabled_check"] = QtWidgets.QCheckBox()
-        self.editor_widgets["comment_edit"] = QtWidgets.QLineEdit()
-        self.editor_widgets["keys_edit"] = QtWidgets.QLineEdit()
-        self.editor_widgets["keysecondary_edit"] = QtWidgets.QLineEdit()
+        self.basic_info_group, basic_info_content = self._create_group()
+        basic_info_layout = QtWidgets.QFormLayout()
+        basic_info_layout.setContentsMargins(0, 0, 0, 0)
+        basic_info_layout.setSpacing(8)
+        self.editor_widgets["enabled_check"] = CheckBox()
+        self.editor_widgets["comment_edit"] = LineEdit()
+        self.editor_widgets["keys_edit"] = LineEdit()
+        self.editor_widgets["keysecondary_edit"] = LineEdit()
         self.editor_widgets["content_edit"] = FocusOutTextEdit()
         self.editor_widgets["content_edit"].setAcceptRichText(False)
-        self.editor_save_status_label = QtWidgets.QLabel()
+        self.editor_save_status_label = CaptionLabel()
         self.editor_save_status_label.setAlignment(QtCore.Qt.AlignmentFlag.AlignRight)
         first_row_layout = QtWidgets.QHBoxLayout()
         first_row_layout.setContentsMargins(0, 0, 0, 0)
@@ -225,9 +268,9 @@ class EditorTab(AbstractTab):
         first_row_layout.addStretch()
         first_row_layout.addWidget(self.editor_save_status_label)
         basic_info_layout.addRow(first_row_layout)
-        self.comment_label = QtWidgets.QLabel()
-        self.keys_label = QtWidgets.QLabel()
-        self.keysecondary_label = QtWidgets.QLabel()
+        self.comment_label = BodyLabel()
+        self.keys_label = BodyLabel()
+        self.keysecondary_label = BodyLabel()
         basic_info_layout.addRow(
             self.comment_label, self.editor_widgets["comment_edit"]
         )
@@ -235,156 +278,248 @@ class EditorTab(AbstractTab):
         basic_info_layout.addRow(
             self.keysecondary_label, self.editor_widgets["keysecondary_edit"]
         )
+        basic_info_content.addLayout(basic_info_layout)
         editor_right_layout.addWidget(self.basic_info_group)
-        self.content_label = QtWidgets.QLabel()
+        self.content_label = BodyLabel()
         editor_right_layout.addWidget(self.content_label)
         editor_right_layout.addWidget(self.editor_widgets["content_edit"], stretch=1)
-        self.activation_group = QtWidgets.QGroupBox()
-        activation_layout = QtWidgets.QHBoxLayout(self.activation_group)
-        self.editor_widgets["logic_combo"] = QtWidgets.QComboBox()
-        self.editor_widgets["logic_combo"].addItems(
-            [translate(k) for k in self.editor_logic_keys]
-        )
-        self.editor_widgets["position_combo"] = QtWidgets.QComboBox()
-        self.editor_widgets["position_combo"].addItems(
-            [translate(k) for k in self.editor_position_keys]
-        )
-        self.editor_widgets["strategy_combo"] = QtWidgets.QComboBox()
-        self.editor_widgets["strategy_combo"].addItems(
-            [translate(k) for k in self.editor_strategy_keys]
-        )
+        self.activation_group, activation_content = self._create_group()
+        activation_first_row = QtWidgets.QHBoxLayout()
+        activation_first_row.setContentsMargins(0, 0, 0, 0)
+        activation_first_row.setSpacing(8)
+        self.editor_widgets["logic_combo"] = ComboBox()
+        self._constrain_combo(self.editor_widgets["logic_combo"], 110, 240)
+        self._populate_combo("logic_combo", self.editor_logic_keys)
+        self.editor_widgets["strategy_combo"] = ComboBox()
+        self._constrain_combo(self.editor_widgets["strategy_combo"], 120, 240)
+        self._populate_combo("strategy_combo", self.editor_strategy_keys)
+        self.logic_label = BodyLabel()
+        self.strategy_label = BodyLabel()
+        activation_first_row.addWidget(self.logic_label)
+        activation_first_row.addWidget(self.editor_widgets["logic_combo"])
+        activation_first_row.addWidget(self.strategy_label)
+        activation_first_row.addWidget(self.editor_widgets["strategy_combo"])
+        activation_first_row.addStretch()
+        activation_content.addLayout(activation_first_row)
+        activation_second_row = QtWidgets.QHBoxLayout()
+        activation_second_row.setContentsMargins(0, 0, 0, 0)
+        activation_second_row.setSpacing(8)
+        self.editor_widgets["position_combo"] = ComboBox()
+        self._constrain_combo(self.editor_widgets["position_combo"], 150, 320)
+        self._populate_combo("position_combo", self.editor_position_keys)
         self.editor_widgets["order_edit"] = ShakeLineEdit()
         self.editor_widgets["order_edit"].setValidator(QtGui.QIntValidator())
+        self._constrain_numeric(self.editor_widgets["order_edit"])
         self.editor_widgets["probability_edit"] = ShakeLineEdit()
         self.editor_widgets["probability_edit"].setValidator(QtGui.QIntValidator())
-        self.editor_widgets["useProbability_check"] = QtWidgets.QCheckBox()
+        self._constrain_numeric(self.editor_widgets["probability_edit"])
+        self.editor_widgets["useProbability_check"] = CheckBox()
         self.editor_widgets["depth_edit"] = ShakeLineEdit()
         self.editor_widgets["depth_edit"].setValidator(QtGui.QIntValidator(0, 999))
+        self._constrain_numeric(self.editor_widgets["depth_edit"])
         self.editor_widgets["depth_edit"].hide()
-        self.logic_label = QtWidgets.QLabel()
-        self.strategy_label = QtWidgets.QLabel()
-        self.position_label = QtWidgets.QLabel()
-        self.order_label = QtWidgets.QLabel()
-        self.probability_label = QtWidgets.QLabel()
-        activation_layout.addWidget(self.logic_label)
-        activation_layout.addWidget(self.editor_widgets["logic_combo"])
-        activation_layout.addWidget(self.strategy_label)
-        activation_layout.addWidget(self.editor_widgets["strategy_combo"])
-        position_layout = QtWidgets.QHBoxLayout()
-        position_layout.setContentsMargins(0, 0, 0, 0)
-        position_layout.addWidget(self.position_label)
-        position_layout.addWidget(self.editor_widgets["position_combo"])
-        position_layout.addWidget(self.editor_widgets["depth_edit"])
-        activation_layout.addLayout(position_layout)
-        activation_layout.addWidget(self.order_label)
-        activation_layout.addWidget(self.editor_widgets["order_edit"])
-        activation_layout.addWidget(self.probability_label)
-        activation_layout.addWidget(self.editor_widgets["probability_edit"])
-        activation_layout.addWidget(self.editor_widgets["useProbability_check"])
+        self.position_label = BodyLabel()
+        activation_second_row.addWidget(self.position_label)
+        activation_second_row.addWidget(self.editor_widgets["position_combo"])
+        activation_second_row.addWidget(self.editor_widgets["depth_edit"])
+        activation_second_row.addStretch()
+        activation_content.addLayout(activation_second_row)
+        activation_third_row = QtWidgets.QHBoxLayout()
+        activation_third_row.setContentsMargins(0, 0, 0, 0)
+        activation_third_row.setSpacing(8)
+        self.order_label = BodyLabel()
+        self.probability_label = BodyLabel()
+        activation_third_row.addWidget(self.order_label)
+        activation_third_row.addWidget(self.editor_widgets["order_edit"])
+        activation_third_row.addWidget(self.probability_label)
+        activation_third_row.addWidget(self.editor_widgets["probability_edit"])
+        activation_third_row.addWidget(self.editor_widgets["useProbability_check"])
+        activation_third_row.addStretch()
+        activation_content.addLayout(activation_third_row)
         editor_right_layout.addWidget(self.activation_group)
-        self.scan_group = QtWidgets.QGroupBox()
-        scan_layout = QtWidgets.QHBoxLayout(self.scan_group)
+        self.scan_group, scan_content = self._create_group()
+        scan_first_row = QtWidgets.QHBoxLayout()
+        scan_first_row.setContentsMargins(0, 0, 0, 0)
+        scan_first_row.setSpacing(8)
         self.editor_widgets["scanDepth_edit"] = ShakeLineEdit()
         self.editor_widgets["scanDepth_edit"].setValidator(QtGui.QIntValidator(0, 9999))
-        self.editor_widgets["caseSensitive_combo"] = QtWidgets.QComboBox()
-        self.editor_widgets["caseSensitive_combo"].addItems(
-            [translate(k) for k in self.editor_tri_state_keys]
-        )
-        self.editor_widgets["matchWholeWords_combo"] = QtWidgets.QComboBox()
-        self.editor_widgets["matchWholeWords_combo"].addItems(
-            [translate(k) for k in self.editor_tri_state_keys]
-        )
-        self.editor_widgets["useGroupScoring_combo"] = QtWidgets.QComboBox()
-        self.editor_widgets["useGroupScoring_combo"].addItems(
-            [translate(k) for k in self.editor_tri_state_keys]
-        )
-        self.scan_depth_label = QtWidgets.QLabel()
-        self.case_sensitive_label = QtWidgets.QLabel()
-        self.whole_words_label = QtWidgets.QLabel()
-        self.group_scoring_label = QtWidgets.QLabel()
-        scan_layout.addWidget(self.scan_depth_label)
-        scan_layout.addWidget(self.editor_widgets["scanDepth_edit"])
-        scan_layout.addWidget(self.case_sensitive_label)
-        scan_layout.addWidget(self.editor_widgets["caseSensitive_combo"])
-        scan_layout.addWidget(self.whole_words_label)
-        scan_layout.addWidget(self.editor_widgets["matchWholeWords_combo"])
-        scan_layout.addWidget(self.group_scoring_label)
-        scan_layout.addWidget(self.editor_widgets["useGroupScoring_combo"])
+        self._constrain_numeric(self.editor_widgets["scanDepth_edit"])
+        self.editor_widgets["caseSensitive_combo"] = ComboBox()
+        self._constrain_combo(self.editor_widgets["caseSensitive_combo"], 110, 220)
+        self._populate_combo("caseSensitive_combo", self.editor_tri_state_keys)
+        self.scan_depth_label = BodyLabel()
+        self.case_sensitive_label = BodyLabel()
+        scan_first_row.addWidget(self.scan_depth_label)
+        scan_first_row.addWidget(self.editor_widgets["scanDepth_edit"])
+        scan_first_row.addWidget(self.case_sensitive_label)
+        scan_first_row.addWidget(self.editor_widgets["caseSensitive_combo"])
+        scan_first_row.addStretch()
+        scan_content.addLayout(scan_first_row)
+        scan_second_row = QtWidgets.QHBoxLayout()
+        scan_second_row.setContentsMargins(0, 0, 0, 0)
+        scan_second_row.setSpacing(8)
+        self.editor_widgets["matchWholeWords_combo"] = ComboBox()
+        self._constrain_combo(self.editor_widgets["matchWholeWords_combo"], 110, 220)
+        self._populate_combo("matchWholeWords_combo", self.editor_tri_state_keys)
+        self.whole_words_label = BodyLabel()
+        scan_second_row.addWidget(self.whole_words_label)
+        scan_second_row.addWidget(self.editor_widgets["matchWholeWords_combo"])
+        scan_second_row.addStretch()
+        scan_content.addLayout(scan_second_row)
+        scan_third_row = QtWidgets.QHBoxLayout()
+        scan_third_row.setContentsMargins(0, 0, 0, 0)
+        scan_third_row.setSpacing(8)
+        self.editor_widgets["useGroupScoring_combo"] = ComboBox()
+        self._constrain_combo(self.editor_widgets["useGroupScoring_combo"], 110, 220)
+        self._populate_combo("useGroupScoring_combo", self.editor_tri_state_keys)
+        self.group_scoring_label = BodyLabel()
+        scan_third_row.addWidget(self.group_scoring_label)
+        scan_third_row.addWidget(self.editor_widgets["useGroupScoring_combo"])
+        scan_third_row.addStretch()
+        scan_content.addLayout(scan_third_row)
         editor_right_layout.addWidget(self.scan_group)
-        self.advanced_group = QtWidgets.QGroupBox()
-        advanced_layout = QtWidgets.QGridLayout(self.advanced_group)
+        self.advanced_group, advanced_content = self._create_group()
+        advanced_layout = QtWidgets.QGridLayout()
+        advanced_layout.setContentsMargins(0, 0, 0, 0)
+        advanced_layout.setSpacing(8)
         advanced_layout.setColumnStretch(1, 1)
         group_layout = QtWidgets.QHBoxLayout()
-        self.editor_widgets["group_edit"] = QtWidgets.QLineEdit()
-        self.editor_widgets["groupOverride_check"] = QtWidgets.QCheckBox()
+        group_layout.setContentsMargins(0, 0, 0, 0)
+        group_layout.setSpacing(8)
+        self.editor_widgets["group_edit"] = LineEdit()
+        self.editor_widgets["groupOverride_check"] = CheckBox()
         group_layout.addWidget(self.editor_widgets["group_edit"], 1)
         group_layout.addWidget(self.editor_widgets["groupOverride_check"])
-        self.inclusion_group_label = QtWidgets.QLabel()
+        self.inclusion_group_label = BodyLabel()
         advanced_layout.addWidget(self.inclusion_group_label, 0, 0)
         advanced_layout.addLayout(group_layout, 0, 1, 1, 3)
         self.editor_widgets["groupWeight_edit"] = ShakeLineEdit()
         self.editor_widgets["groupWeight_edit"].setValidator(QtGui.QIntValidator())
+        self._constrain_numeric(self.editor_widgets["groupWeight_edit"])
         self.editor_widgets["sticky_edit"] = ShakeLineEdit()
         self.editor_widgets["sticky_edit"].setValidator(QtGui.QIntValidator())
+        self._constrain_numeric(self.editor_widgets["sticky_edit"])
         self.editor_widgets["cooldown_edit"] = ShakeLineEdit()
         self.editor_widgets["cooldown_edit"].setValidator(QtGui.QIntValidator())
+        self._constrain_numeric(self.editor_widgets["cooldown_edit"])
         self.editor_widgets["delay_edit"] = ShakeLineEdit()
         self.editor_widgets["delay_edit"].setValidator(QtGui.QIntValidator())
-        numeric_fields_layout = QtWidgets.QHBoxLayout()
-        self.group_weight_label = QtWidgets.QLabel()
-        self.sticky_label = QtWidgets.QLabel()
-        self.cooldown_label = QtWidgets.QLabel()
-        self.delay_label = QtWidgets.QLabel()
-        numeric_fields_layout.addWidget(self.group_weight_label)
-        numeric_fields_layout.addWidget(self.editor_widgets["groupWeight_edit"])
-        numeric_fields_layout.addWidget(self.sticky_label)
-        numeric_fields_layout.addWidget(self.editor_widgets["sticky_edit"])
-        numeric_fields_layout.addWidget(self.cooldown_label)
-        numeric_fields_layout.addWidget(self.editor_widgets["cooldown_edit"])
-        numeric_fields_layout.addWidget(self.delay_label)
-        numeric_fields_layout.addWidget(self.editor_widgets["delay_edit"])
+        self._constrain_numeric(self.editor_widgets["delay_edit"])
+        numeric_fields_layout = QtWidgets.QVBoxLayout()
+        numeric_fields_layout.setContentsMargins(0, 0, 0, 0)
+        numeric_fields_layout.setSpacing(8)
+        self.group_weight_label = BodyLabel()
+        self.sticky_label = BodyLabel()
+        self.cooldown_label = BodyLabel()
+        self.delay_label = BodyLabel()
+        numeric_first_row = QtWidgets.QHBoxLayout()
+        numeric_first_row.setContentsMargins(0, 0, 0, 0)
+        numeric_first_row.setSpacing(8)
+        numeric_first_row.addWidget(self.group_weight_label)
+        numeric_first_row.addWidget(self.editor_widgets["groupWeight_edit"])
+        numeric_first_row.addWidget(self.sticky_label)
+        numeric_first_row.addWidget(self.editor_widgets["sticky_edit"])
+        numeric_first_row.addStretch()
+        numeric_second_row = QtWidgets.QHBoxLayout()
+        numeric_second_row.setContentsMargins(0, 0, 0, 0)
+        numeric_second_row.setSpacing(8)
+        numeric_second_row.addWidget(self.cooldown_label)
+        numeric_second_row.addWidget(self.editor_widgets["cooldown_edit"])
+        numeric_second_row.addWidget(self.delay_label)
+        numeric_second_row.addWidget(self.editor_widgets["delay_edit"])
+        numeric_second_row.addStretch()
+        numeric_fields_layout.addLayout(numeric_first_row)
+        numeric_fields_layout.addLayout(numeric_second_row)
         advanced_layout.addLayout(numeric_fields_layout, 1, 0, 1, 4)
         separator = QtWidgets.QFrame()
         separator.setFrameShape(QtWidgets.QFrame.HLine)
         separator.setFrameShadow(QtWidgets.QFrame.Sunken)
         advanced_layout.addWidget(separator, 2, 0, 1, 4)
-        self.editor_widgets["addMemo_check"] = QtWidgets.QCheckBox()
-        self.editor_widgets["preventRecursion_check"] = QtWidgets.QCheckBox()
-        self.editor_widgets["excludeRecursion_check"] = QtWidgets.QCheckBox()
-        delay_recursion_layout = QtWidgets.QHBoxLayout()
-        delay_recursion_layout.setContentsMargins(0, 0, 0, 0)
-        self.editor_widgets["delayUntilRecursion_check"] = QtWidgets.QCheckBox()
+        self.editor_widgets["addMemo_check"] = CheckBox()
+        self.editor_widgets["preventRecursion_check"] = CheckBox()
+        self.editor_widgets["excludeRecursion_check"] = CheckBox()
+        self.editor_widgets["delayUntilRecursion_check"] = CheckBox()
         self.editor_widgets["delayRecursionLevel_edit"] = ShakeLineEdit()
         self.editor_widgets["delayRecursionLevel_edit"].setValidator(
             QtGui.QIntValidator(1, 999)
         )
+        self._constrain_numeric(self.editor_widgets["delayRecursionLevel_edit"])
         self.editor_widgets["delayRecursionLevel_edit"].setVisible(False)
+        advanced_layout.addWidget(self.editor_widgets["addMemo_check"], 3, 0, 1, 2)
+        advanced_layout.addWidget(
+            self.editor_widgets["preventRecursion_check"], 4, 0, 1, 2
+        )
+        advanced_layout.addWidget(
+            self.editor_widgets["excludeRecursion_check"], 5, 0, 1, 2
+        )
+        delay_recursion_layout = QtWidgets.QHBoxLayout()
+        delay_recursion_layout.setContentsMargins(0, 0, 0, 0)
+        delay_recursion_layout.setSpacing(8)
         delay_recursion_layout.addWidget(
             self.editor_widgets["delayUntilRecursion_check"]
         )
         delay_recursion_layout.addWidget(
             self.editor_widgets["delayRecursionLevel_edit"]
         )
-        recursion_checkboxes_layout = QtWidgets.QHBoxLayout()
-        recursion_checkboxes_layout.addWidget(self.editor_widgets["addMemo_check"])
-        recursion_checkboxes_layout.addStretch()
-        recursion_checkboxes_layout.addWidget(
-            self.editor_widgets["preventRecursion_check"]
-        )
-        recursion_checkboxes_layout.addStretch()
-        recursion_checkboxes_layout.addWidget(
-            self.editor_widgets["excludeRecursion_check"]
-        )
-        recursion_checkboxes_layout.addStretch()
-        recursion_checkboxes_layout.addLayout(delay_recursion_layout)
-        advanced_layout.addLayout(recursion_checkboxes_layout, 3, 0, 1, 4)
-        self.editor_widgets["automationId_edit"] = QtWidgets.QLineEdit()
-        self.automation_id_label = QtWidgets.QLabel()
-        advanced_layout.addWidget(self.automation_id_label, 4, 0)
-        advanced_layout.addWidget(self.editor_widgets["automationId_edit"], 4, 1, 1, 3)
+        delay_recursion_layout.addStretch()
+        advanced_layout.addLayout(delay_recursion_layout, 6, 0, 1, 4)
+        self.editor_widgets["automationId_edit"] = LineEdit()
+        self.automation_id_label = BodyLabel()
+        advanced_layout.addWidget(self.automation_id_label, 7, 0)
+        advanced_layout.addWidget(self.editor_widgets["automationId_edit"], 7, 1, 1, 3)
+        advanced_content.addLayout(advanced_layout)
         editor_right_layout.addWidget(self.advanced_group)
         editor_right_layout.addStretch()
+        for widget_name in (
+            "comment_edit",
+            "keys_edit",
+            "keysecondary_edit",
+            "group_edit",
+            "automationId_edit",
+        ):
+            self.editor_widgets[widget_name].setMinimumWidth(0)
+        for widget_name in (
+            "enabled_check",
+            "useProbability_check",
+            "groupOverride_check",
+            "addMemo_check",
+            "preventRecursion_check",
+            "excludeRecursion_check",
+            "delayUntilRecursion_check",
+        ):
+            self.editor_widgets[widget_name].setMinimumWidth(0)
         return scroll_area
+
+    def _populate_combo(self, widget_name: str, keys: tuple[str, ...]):
+        combo = self.editor_widgets[widget_name]
+        current_index = combo.currentIndex()
+        current_data = combo.currentData()
+        blocker = QtCore.QSignalBlocker(combo)
+        combo.clear()
+        for key in keys:
+            combo.addItem(translate(key), userData=key)
+        restored_index = combo.findData(current_data) if current_data is not None else -1
+        if restored_index < 0 and 0 <= current_index < combo.count():
+            restored_index = current_index
+        combo.setCurrentIndex(restored_index if restored_index >= 0 else 0)
+        del blocker
+
+    def retranslate(self):
+        self._populate_combo("logic_combo", self.editor_logic_keys)
+        self._populate_combo("position_combo", self.editor_position_keys)
+        self._populate_combo("strategy_combo", self.editor_strategy_keys)
+        self._populate_combo("caseSensitive_combo", self.editor_tri_state_keys)
+        self._populate_combo("matchWholeWords_combo", self.editor_tri_state_keys)
+        self._populate_combo("useGroupScoring_combo", self.editor_tri_state_keys)
+
+    def _show_warning(self, title: str, content: str):
+        box = MessageBox(title, content, self)
+        box.hideCancelButton()
+        box.exec()
+
+    def _confirm(self, title: str, content: str) -> bool:
+        box = MessageBox(title, content, self)
+        return box.exec() == QtWidgets.QDialog.DialogCode.Accepted
 
     def _load_strategy(self, entry_data):
         strategy_idx = 1 if entry_data.get('constant') else 2 if entry_data.get('vectorized') else 0
@@ -460,7 +595,7 @@ class EditorTab(AbstractTab):
             "useGroupScoring_combo",
         ]:
             if widget_name in self.editor_widgets and isinstance(
-                self.editor_widgets[widget_name], QtWidgets.QComboBox
+                self.editor_widgets[widget_name], ComboBox
             ):
                 self.editor_widgets[widget_name].currentIndexChanged.connect(
                     self._trigger_editor_debounce_save
@@ -475,7 +610,7 @@ class EditorTab(AbstractTab):
             "delayUntilRecursion_check",
         ]:
             if widget_name in self.editor_widgets and isinstance(
-                self.editor_widgets[widget_name], QtWidgets.QCheckBox
+                self.editor_widgets[widget_name], CheckBox
             ):
                 self.editor_widgets[widget_name].toggled.connect(
                     self._trigger_editor_debounce_save
@@ -514,14 +649,14 @@ class EditorTab(AbstractTab):
 
     def editor_clear_form(self):
         for widget in self.editor_widgets.values():
-            if isinstance(widget, QtWidgets.QLineEdit):
+            if isinstance(widget, ComboBox):
+                widget.setCurrentIndex(0)
+            elif isinstance(widget, QtWidgets.QLineEdit):
                 widget.clear()
             elif isinstance(widget, QtWidgets.QTextEdit):
                 widget.clear()
             elif isinstance(widget, QtWidgets.QCheckBox):
                 widget.setChecked(False)
-            elif isinstance(widget, QtWidgets.QComboBox):
-                widget.setCurrentIndex(0)
         self.selected_editor_entry_id = None
         self.editor_active_entry_copy = None
 
@@ -655,8 +790,7 @@ class EditorTab(AbstractTab):
     @QtCore.Slot()
     def editor_add_entry(self):
         if not self.data_handler.data:
-            QtWidgets.QMessageBox.warning(
-                self,
+            self._show_warning(
                 translate("tab.editor.dialog.action_failed.title"),
                 translate("tab.editor.dialog.action_failed.no_lorebook_loaded"),
             )
@@ -671,8 +805,7 @@ class EditorTab(AbstractTab):
     @QtCore.Slot()
     def editor_duplicate_entry(self):
         if not self.selected_editor_entry_id:
-            QtWidgets.QMessageBox.warning(
-                self,
+            self._show_warning(
                 translate("tab.editor.dialog.action_failed.title"),
                 translate(
                     "tab.editor.dialog.action_failed.no_entry_selected_duplicate"),
@@ -689,8 +822,7 @@ class EditorTab(AbstractTab):
     @QtCore.Slot()
     def editor_delete_entry(self):
         if not self.selected_editor_entry_id:
-            QtWidgets.QMessageBox.warning(
-                self,
+            self._show_warning(
                 translate("tab.editor.dialog.action_failed.title"),
                 translate("tab.editor.dialog.action_failed.no_entry_selected_delete"),
             )
@@ -700,23 +832,19 @@ class EditorTab(AbstractTab):
             self.selected_editor_entry_id
         ].get("comment", self.selected_editor_entry_id)
         title = translate("tab.editor.dialog.confirm_delete.title")
-        text = translate("tab.editor.dialog.confirm_delete.text", entry_name=entry_name)
-        reply = QtWidgets.QMessageBox.question(
-            self,
-            title,
-            text,
-            QtWidgets.QMessageBox.Yes | QtWidgets.QMessageBox.No,
-            QtWidgets.QMessageBox.No,
+        text = translate(
+            "tab.editor.dialog.confirm_delete.text", entry_name=str(entry_name)
         )
-        if reply == QtWidgets.QMessageBox.Yes:
-            row_to_reselect = self.editor_entry_table.currentRow()
-            self.data_handler.delete_entry(self.selected_editor_entry_id)
-            self.editor_clear_form()
-            self.editor_form_widget.setEnabled(False)
-            new_row_count = self.editor_entry_table.rowCount()
-            if new_row_count > 0:
-                index_to_select = min(row_to_reselect, new_row_count - 1)
-                self.editor_entry_table.setCurrentCell(index_to_select, 0)
+        if not self._confirm(title, text):
+            return
+        row_to_reselect = self.editor_entry_table.currentRow()
+        self.data_handler.delete_entry(self.selected_editor_entry_id)
+        self.editor_clear_form()
+        self.editor_form_widget.setEnabled(False)
+        new_row_count = self.editor_entry_table.rowCount()
+        if new_row_count > 0:
+            index_to_select = min(row_to_reselect, new_row_count - 1)
+            self.editor_entry_table.setCurrentCell(index_to_select, 0)
 
     @QtCore.Slot(str)
     def on_global_search_changed(self, text):

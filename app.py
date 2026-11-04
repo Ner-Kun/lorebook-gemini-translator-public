@@ -74,7 +74,7 @@ class LGTApp(CoreApp):
         export_action.setShortcut("Ctrl+E")
         export_action.triggered.connect(lambda: export_lorebook(self))
         export_action.setEnabled(False)
-        self.file_menu.insertAction(self.settings_action, export_action)
+        self.add_app_action(export_action)
         self.data_handler.data_loaded.connect(lambda: export_action.setEnabled(True))
 
         self.editor_tab = EditorTab(main_window=self, data_handler=self.data_handler)
@@ -84,7 +84,7 @@ class LGTApp(CoreApp):
 
         self.user_tabs.extend([self.editor_tab, self.translation_tab])
         self.load_user_tabs()
-        self.tab_widget.setCurrentIndex(1)
+        self.show_app_tab(self.translation_tab)
 
     def _connect_tab_signals(self) -> None:
         self.editor_tab.search_term_changed.connect(
