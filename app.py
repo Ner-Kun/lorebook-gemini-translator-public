@@ -14,12 +14,11 @@ from .constants import (
     APP_NAME,
     APP_VERSION,
     LOG_PREFIX,
-#     APP_VERSION_URL,
-    SYSTEM_PROMPT,
-    CONTEXT_INSTRUCTIONS,
-    USER_PROMPT,
-    REGEN_PROMPT,
+    APP_DONATION_URL,
+    APP_SUPPORT_TEXT,
 )
+from .default_profile import get_default_profile
+from omni_trans_core.donation import DonationConfig, DonationTarget
 
 
 logger: Logger = logging.getLogger(name=f"{LOG_PREFIX}_APP")
@@ -39,11 +38,12 @@ class LGTApp(CoreApp):
         settings.PROVIDER_CUSTOM_HEADERS.update(LGT_HEADERS)
 
         data_handler = LorebookDataHandler()
+        default_profile = get_default_profile()
         prompt_formatter = DefaultPromptFormatter(
-            system_prompt=SYSTEM_PROMPT,
-            user_prompt=USER_PROMPT,
-            regen_prompt=REGEN_PROMPT,
-            context_instructions=CONTEXT_INSTRUCTIONS,
+            system_prompt=default_profile.system_prompt,
+            user_prompt=default_profile.user_prompt,
+            regen_prompt=default_profile.regen_prompt,
+            context_instructions=default_profile.context_instructions,
         )
 
         super().__init__(
@@ -51,8 +51,15 @@ class LGTApp(CoreApp):
             tabs=[],
             prompt_formatter=prompt_formatter,
             app_name=APP_NAME,
-            # app_version_url=APP_VERSION_URL,
             app_version=APP_VERSION,
+            default_profile=default_profile,
+            donation_config=DonationConfig(
+                app=DonationTarget(
+                    name=APP_NAME,
+                    url=APP_DONATION_URL,
+                    message=APP_SUPPORT_TEXT,
+                )
+            ),
         )
 
         self._setup_ui()

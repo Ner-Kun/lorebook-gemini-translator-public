@@ -71,7 +71,7 @@ def main() -> None:
 
     sys.path.insert(0, project_root)
 
-    settings.initialize_app_paths(project_root_path=project_root)
+    settings.initialize_app_paths(project_root_path=project_root, app_id="lgt_app")
 
     settings.load_settings()
 
