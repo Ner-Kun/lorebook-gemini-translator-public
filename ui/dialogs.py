@@ -67,6 +67,10 @@ class ExportSettingsDialog(Dialog):
         """Keep the Fluent title bar so the dialog can be moved, drop the inline title."""
         self.titleBar.show()
         self.titleBar.raise_()
+        self.windowTitleLabel.setFixedHeight(self.titleBar.height())
+        self.windowTitleLabel.setAlignment(
+            QtCore.Qt.AlignmentFlag.AlignLeft | QtCore.Qt.AlignmentFlag.AlignVCenter
+        )
         self.windowTitleLabel.setContentsMargins(16, 0, 0, 0)
         # The stock title bar glyph is black and disappears on the dark background.
         self.titleBar.closeBtn.setNormalColor(
