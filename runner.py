@@ -36,7 +36,6 @@ from rich.traceback import install as install_rich_tracebacks  # noqa: E402
 from omni_trans_core import settings  # noqa: E402
 from omni_trans_core.crash_handler import install_crash_handler  # noqa: E402
 from omni_trans_core.localization_manager import loc_man  # noqa: E402
-from omni_trans_core.utils import ui_loader_manager  # noqa: E402
 from omni_trans_core.logger import LoggerManager  # noqa: E402
 from omni_trans_core.ui.theme import detect_best_font  # noqa: E402
 from lgt_app.app import LGTApp  # noqa: E402
@@ -111,7 +110,6 @@ def main() -> None:
 
     main_window = LGTApp()
     main_window.showMaximized()
-    ui_loader_manager.log_summary()
     main_window.log_initialization_complete()
     logger.info("Application initialized")
     sys.exit(app.exec())
