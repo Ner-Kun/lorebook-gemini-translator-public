@@ -134,6 +134,9 @@ class TranslationTab(AbstractTab, IControlWidgetActions):
         self.content_display_group.viewLayout.addWidget(content_display_widget)
         middle_v_splitter.addWidget(self.content_display_group)
         translation_layout.addWidget(middle_v_splitter, stretch=1)
+        middle_v_splitter.setStretchFactor(0, 3)
+        middle_v_splitter.setStretchFactor(1, 1)
+        middle_v_splitter.setSizes([520, 160])
 
     def _show_warning(self, title: str, content: str):
         box = MessageBox(title, content, self)
