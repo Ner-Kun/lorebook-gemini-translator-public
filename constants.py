@@ -1,6 +1,6 @@
 # Application constants
 APP_NAME = "Lorebook Gemini Translator"
-APP_VERSION = "0.4.0"
+APP_VERSION = "0.4.1"
 LOG_PREFIX = "L_G_T"
 
 # Donation
